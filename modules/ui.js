@@ -26,7 +26,8 @@ import {
     addClass,
     deleteClass,
     updateStudentClass,
-    deleteUser
+    deleteUser,
+    updatePassword
 } from './state.js';
 import { handleChangePassword } from './auth.js';
 import { renderCreateQRView, renderScanView } from './qr.js';
@@ -1520,8 +1521,7 @@ function renderSettingsMenu(container, user, phoneScreen) {
                             <input type="text" id="create-user-name" class="form-control" style="padding-left:12px;" placeholder="ชื่อ-นามสกุลจริง" required>
                         </div>
                         <div class="form-group" style="margin-bottom: 8px; position: relative; display: flex; align-items: center;">
-                            <input type="password" id="create-user-pass" class="form-control" style="padding-left:12px; padding-right: 40px;" placeholder="รหัสผ่านเข้าใช้งาน" required>
-                            <i class="fa-solid fa-eye-slash" id="toggle-create-user-pass" style="position: absolute; right: 14px; cursor: pointer; color: var(--gray);"></i>
+                            <input type="text" id="create-user-pass" class="form-control" style="padding-left:12px; background-color: var(--gray-light); cursor: not-allowed;" value="1234" readonly required>
                         </div>
                         <div class="form-group" style="margin-bottom: 8px;" id="create-user-class-group">
                             <input type="text" id="create-user-class" class="form-control" style="padding-left:12px;" placeholder="ห้องเรียน (เช่น 1/1)" value="1/1">
@@ -1548,6 +1548,13 @@ function renderSettingsMenu(container, user, phoneScreen) {
                             <i class="fa-solid fa-file-excel"></i> นำเข้าข้อมูลผู้ใช้
                         </button>
                     </div>
+                </div>
+
+                <div class="settings-section">
+                    <h4><i class="fa-solid fa-key"></i> จัดการรหัสผ่านผู้ใช้งาน</h4>
+                    <button class="use-card-btn" id="teacher-reset-user-pass-btn" style="width: 100%; margin: 0; background: var(--primary-light); color: var(--primary-dark); border-color: var(--primary);">
+                        <i class="fa-solid fa-rotate-left"></i> รีเซ็ทรหัสผ่านผู้ใช้งานเป็น 1234
+                    </button>
                 </div>
 
                 <div class="settings-section">
@@ -1805,6 +1812,27 @@ function renderSettingsMenu(container, user, phoneScreen) {
                 updateSystemStats();
             };
             reader.readAsText(file, 'UTF-8');
+        };
+    }
+
+    // ปุ่มของครู: รีเซ็ตรหัสผ่านของนักเรียน/ผู้ใช้
+    const resetUserPassBtn = document.getElementById('teacher-reset-user-pass-btn');
+    if (resetUserPassBtn) {
+        resetUserPassBtn.onclick = () => {
+            const targetUserId = prompt("กรอก User ID ที่ต้องการรีเซ็ตรหัสผ่านเป็น 1234:");
+            if (targetUserId) {
+                const db = loadDatabase();
+                if (db.users[targetUserId]) {
+                    const success = updatePassword(targetUserId, '1234');
+                    if (success) {
+                        alert(`รีเซ็ตรหัสผ่านของ ${db.users[targetUserId].name} (ID: ${targetUserId}) เป็น 1234 สำเร็จแล้ว!`);
+                    } else {
+                        alert("ไม่สามารถอัปเดตรหัสผ่านได้ในขณะนี้");
+                    }
+                } else {
+                    alert("ไม่พบรหัสผู้ใช้นี้ในระบบ");
+                }
+            }
         };
     }
 
