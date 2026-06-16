@@ -460,6 +460,12 @@ body {
     font-size: 0.9rem;
 }
 
+.form-control-wrapper i.fa-eye,
+.form-control-wrapper i.fa-eye-slash {
+    left: auto !important;
+    right: 14px !important;
+}
+
 .form-control {
     width: 100%;
     padding: 12px 12px 12px 40px;
