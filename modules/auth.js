@@ -16,10 +16,10 @@ export function renderLoginScreen(phoneScreen, onLoginSuccess) {
             
             <form id="login-form">
                 <div class="form-group">
-                    <label for="username">ชื่อผู้ใช้ (User ID)</label>
+                    <label for="username">User ID</label>
                     <div class="form-control-wrapper">
                         <i class="fa-solid fa-user"></i>
-                        <input type="text" id="username" class="form-control" placeholder="กรอก User ID (เช่น T0001)" required autocomplete="username">
+                        <input type="text" id="username" class="form-control" placeholder="กรอก User ID (เช่น M000)" required autocomplete="username">
                     </div>
                 </div>
                 
@@ -27,7 +27,8 @@ export function renderLoginScreen(phoneScreen, onLoginSuccess) {
                     <label for="password">รหัสผ่าน</label>
                     <div class="form-control-wrapper">
                         <i class="fa-solid fa-lock"></i>
-                        <input type="password" id="password" class="form-control" placeholder="กรอกรหัสผ่าน" required autocomplete="current-password">
+                        <input type="password" id="password" class="form-control" placeholder="กรอกรหัสผ่าน" required autocomplete="current-password" style="padding-right: 40px;">
+                        <i class="fa-solid fa-eye-slash toggle-password" id="toggle-login-pass" style="position: absolute; right: 14px; cursor: pointer; color: var(--gray);"></i>
                     </div>
                 </div>
                 
@@ -35,6 +36,23 @@ export function renderLoginScreen(phoneScreen, onLoginSuccess) {
             </form>
         </div>
     `;
+
+    // ผูกการแสดง/ซ่อนรหัสผ่าน
+    const togglePass = document.getElementById('toggle-login-pass');
+    const passInput = document.getElementById('password');
+    if (togglePass && passInput) {
+        togglePass.onclick = () => {
+            if (passInput.type === 'password') {
+                passInput.type = 'text';
+                togglePass.classList.remove('fa-eye-slash');
+                togglePass.classList.add('fa-eye');
+            } else {
+                passInput.type = 'password';
+                togglePass.classList.remove('fa-eye');
+                togglePass.classList.add('fa-eye-slash');
+            }
+        };
+    }
 
     const form = document.getElementById('login-form');
     form.addEventListener('submit', (e) => {

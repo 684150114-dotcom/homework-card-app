@@ -18,7 +18,7 @@ const DB_KEY = 'homework_app_database';
 // ข้อมูลเริ่มต้นของระบบ (Default Seed Data)
 const defaultData = {
     users: {
-        'T0001': { id: 'T0001', name: 'คุณครูผู้ดูแลระบบ', role: 'teacher', pass: '1304' }
+        'M000': { id: 'M000', name: 'คุณครูผู้ดูแลระบบ (Master)', role: 'teacher', pass: '159753' }
     },
     subjects: ["คอมพิวเตอร์"],
     homework: [],
@@ -42,15 +42,15 @@ export function loadDatabase() {
     }
     try {
         const parsed = JSON.parse(data);
-        // หากไม่มีบัญชีแอดมิน T0001 ใน LocalStorage ให้ทำการล้างค่าเป็นระบบจริง
-        if (!parsed.users || !parsed.users['T0001']) {
-            console.log("Old simulation database detected. Resetting to production defaults...");
+        // หากไม่มีบัญชีแอดมิน M000 ใน LocalStorage ให้ทำการล้างค่าเป็นระบบจริง
+        if (!parsed.users || !parsed.users['M000']) {
+            console.log("Old simulation database detected or missing M000. Resetting to production defaults...");
             saveDatabase(defaultData);
             return defaultData;
         }
-        // ตรวจสอบและบังคับให้รหัสผ่าน T0001 เป็น '1304' เพื่อแก้ไขปัญหารหัสเก่าค้างใช้งานไม่ได้
-        if (parsed.users['T0001'].pass !== '1304') {
-            parsed.users['T0001'].pass = '1304';
+        // ตรวจสอบและบังคับให้รหัสผ่าน M000 เป็น '159753' เพื่อแก้ไขปัญหารหัสเก่าค้างใช้งานไม่ได้
+        if (parsed.users['M000'].pass !== '159753') {
+            parsed.users['M000'].pass = '159753';
             saveDatabase(parsed);
         }
         return parsed;
@@ -214,7 +214,7 @@ function setupRealtimeSync() {
 async function seedCloudDatabase(force = false) {
     if (!dbCloud) return;
     try {
-        const docRef = doc(dbCloud, "users", "T0001");
+        const docRef = doc(dbCloud, "users", "M000");
         const docSnap = await getDoc(docRef);
         
         if (!docSnap.exists() || force) {

@@ -1321,8 +1321,11 @@ function renderSettingsMenu(container, user, phoneScreen) {
                                 <option value="teacher">ครู (Teacher)</option>
                             </select>
                         </div>
-                        <div class="form-group" style="margin-bottom: 8px;">
-                            <input type="text" id="create-user-id" class="form-control" style="padding-left:12px;" placeholder="User ID (เช่น S0001)" required>
+                        <div class="form-group" style="margin-bottom: 4px;">
+                            <input type="text" id="create-user-id" class="form-control" style="padding-left:12px;" placeholder="รหัสประจำตัว (ระบุเฉพาะตัวเลข)" required pattern="[0-9]*" inputmode="numeric">
+                        </div>
+                        <div style="font-size:0.75rem; color: var(--gray); margin-bottom: 8px; font-weight: 500; padding-left: 4px;" id="generated-user-id-preview">
+                            User ID ที่จะถูกสร้าง: S
                         </div>
                         <div class="form-group" style="margin-bottom: 8px;">
                             <input type="text" id="create-user-name" class="form-control" style="padding-left:12px;" placeholder="ชื่อ-นามสกุลจริง" required>
@@ -1336,6 +1339,24 @@ function renderSettingsMenu(container, user, phoneScreen) {
                         </div>
                         <button class="login-btn" id="submit-create-user-btn" style="margin: 0; padding: 8px; background: #2c2c2e; border-color: #2c2c2e;">
                             <i class="fa-solid fa-plus"></i> สร้างผู้ใช้ใหม่
+                        </button>
+                    </div>
+                </div>
+
+                <div class="settings-section">
+                    <h4><i class="fa-solid fa-file-import"></i> นำเข้าข้อมูลผู้ใช้หลายคน (CSV)</h4>
+                    <div class="change-password-box">
+                        <p style="font-size: 0.72rem; color: var(--gray); margin-bottom: 8px; line-height: 1.4;">
+                            โครงสร้างไฟล์ CSV: <code>บทบาท, รหัสตัวเลข, ชื่อ-นามสกุล, รหัสผ่าน, ห้องเรียน(ถ้ามี)</code><br>
+                            - บทบาท: <code>student</code> (หรือ S), <code>parent</code> (หรือ P), <code>teacher</code> (หรือ T)<br>
+                            - รหัสตัวเลข: ระบบจะเติมตัวอักษรนำหน้า S/P/T อัตโนมัติ<br>
+                            ตัวอย่างเช่น: <code>student,0001,ด.ช. สมเกียรติ,1234,1/1</code>
+                        </p>
+                        <div class="form-group" style="margin-bottom: 8px;">
+                            <input type="file" id="import-users-csv" accept=".csv" class="form-control" style="padding-top: 6px; padding-left: 12px; height: 38px;">
+                        </div>
+                        <button class="login-btn" id="submit-import-users-btn" style="margin: 0; padding: 8px; background: var(--primary); border-color: var(--primary);">
+                            <i class="fa-solid fa-file-excel"></i> นำเข้าข้อมูลผู้ใช้
                         </button>
                     </div>
                 </div>
@@ -1443,9 +1464,23 @@ function renderSettingsMenu(container, user, phoneScreen) {
         alert(res.message);
     };
 
-    // จัดการเปลี่ยนบทบาทในการสร้างผู้ใช้
+    // จัดการเปลี่ยนบทบาทในการสร้างผู้ใช้และอัปเดต ID พรีวิว
     const createUserRole = document.getElementById('create-user-role');
     const createUserClassGroup = document.getElementById('create-user-class-group');
+    const createUserIdInput = document.getElementById('create-user-id');
+    const previewDiv = document.getElementById('generated-user-id-preview');
+
+    const updateGeneratedIdPreview = () => {
+        if (createUserIdInput && previewDiv) {
+            const role = createUserRole ? createUserRole.value : 'student';
+            const digits = createUserIdInput.value.trim();
+            let prefix = 'S';
+            if (role === 'parent') prefix = 'P';
+            else if (role === 'teacher') prefix = 'T';
+            previewDiv.innerText = `User ID ที่จะถูกสร้าง: ${prefix}${digits}`;
+        }
+    };
+
     if (createUserRole && createUserClassGroup) {
         createUserRole.onchange = () => {
             if (createUserRole.value === 'student') {
@@ -1453,6 +1488,15 @@ function renderSettingsMenu(container, user, phoneScreen) {
             } else {
                 createUserClassGroup.style.display = 'none';
             }
+            updateGeneratedIdPreview();
+        };
+    }
+
+    // จำกัดให้กรอกเฉพาะตัวเลขเท่านั้นและอัปเดตพรีวิว
+    if (createUserIdInput) {
+        createUserIdInput.oninput = () => {
+            createUserIdInput.value = createUserIdInput.value.replace(/[^0-9]/g, '');
+            updateGeneratedIdPreview();
         };
     }
 
@@ -1461,23 +1505,117 @@ function renderSettingsMenu(container, user, phoneScreen) {
     if (submitCreateUserBtn) {
         submitCreateUserBtn.onclick = () => {
             const role = document.getElementById('create-user-role').value;
-            const id = document.getElementById('create-user-id').value.trim();
+            const numericId = document.getElementById('create-user-id').value.trim();
             const name = document.getElementById('create-user-name').value.trim();
             const pass = document.getElementById('create-user-pass').value.trim();
             const classId = document.getElementById('create-user-class') ? document.getElementById('create-user-class').value.trim() : null;
 
-            if (!id || !name || !pass) {
+            if (!numericId || !name || !pass) {
                 alert('กรุณากรอกข้อมูลให้ครบถ้วน');
                 return;
             }
 
-            const res = createUser(id, name, role, pass, classId);
+            let prefix = 'S';
+            if (role === 'parent') prefix = 'P';
+            else if (role === 'teacher') prefix = 'T';
+
+            const finalId = prefix + numericId;
+
+            const res = createUser(finalId, name, role, pass, classId);
             alert(res.message);
             if (res.success) {
                 document.getElementById('create-user-id').value = '';
                 document.getElementById('create-user-name').value = '';
                 document.getElementById('create-user-pass').value = '';
+                updateGeneratedIdPreview();
             }
+        };
+    }
+
+    // จัดการการนำเข้าบัญชีจากไฟล์ CSV
+    const submitImportUsersBtn = document.getElementById('submit-import-users-btn');
+    const importCsvInput = document.getElementById('import-users-csv');
+    if (submitImportUsersBtn && importCsvInput) {
+        submitImportUsersBtn.onclick = () => {
+            const file = importCsvInput.files[0];
+            if (!file) {
+                alert('กรุณาเลือกไฟล์ CSV ก่อน');
+                return;
+            }
+
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const text = e.target.result;
+                const lines = text.split(/\r?\n/);
+                let successCount = 0;
+                let failCount = 0;
+                let messages = [];
+
+                lines.forEach((line, index) => {
+                    // ข้ามหัวข้อหลัก (Header) หากมี
+                    if (index === 0 && (line.toLowerCase().includes('role') || line.includes('บทบาท'))) {
+                        return;
+                    }
+                    if (!line.trim()) return;
+
+                    // แยกคอลัมน์ด้วยคอมมา (Comma)
+                    const cols = line.split(',').map(c => c.trim());
+                    if (cols.length < 4) {
+                        failCount++;
+                        return;
+                    }
+
+                    let role = cols[0].toLowerCase();
+                    let numericId = cols[1].replace(/[^0-9]/g, '');
+                    let name = cols[2];
+                    let pass = cols[3];
+                    let classId = cols[4] || null;
+
+                    if (!role || !numericId || !name || !pass) {
+                        failCount++;
+                        return;
+                    }
+
+                    // แปลงชื่อบทบาทให้ตรงมาตรฐาน
+                    if (role === 's' || role === 'student') {
+                        role = 'student';
+                    } else if (role === 'p' || role === 'parent') {
+                        role = 'parent';
+                    } else if (role === 't' || role === 'teacher') {
+                        role = 'teacher';
+                    } else {
+                        failCount++;
+                        return;
+                    }
+
+                    let prefix = 'S';
+                    if (role === 'parent') prefix = 'P';
+                    else if (role === 'teacher') prefix = 'T';
+
+                    const finalId = prefix + numericId;
+
+                    const res = createUser(finalId, name, role, pass, classId);
+                    if (res.success) {
+                        successCount++;
+                    } else {
+                        failCount++;
+                        messages.push(`${finalId}: ${res.message}`);
+                    }
+                });
+
+                let resultMsg = `นำเข้าสำเร็จ ${successCount} รายการ`;
+                if (failCount > 0) {
+                    resultMsg += `, ล้มเหลว ${failCount} รายการ`;
+                }
+                if (messages.length > 0) {
+                    resultMsg += `\n\nตัวอย่างข้อผิดพลาด:\n` + messages.slice(0, 5).join('\n');
+                }
+                alert(resultMsg);
+                importCsvInput.value = '';
+                // รีเฟรชสถิติในระบบจำลองจำลอง
+                updateSystemStats();
+            };
+            reader.readAsText(file, 'UTF-8');
         };
     }
 
