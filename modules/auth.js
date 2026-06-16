@@ -19,7 +19,7 @@ export function renderLoginScreen(phoneScreen, onLoginSuccess) {
                     <label for="username">ชื่อผู้ใช้ (User ID)</label>
                     <div class="form-control-wrapper">
                         <i class="fa-solid fa-user"></i>
-                        <input type="text" id="username" class="form-control" placeholder="กรอก User ID เช่น student1, teacher1" required autocomplete="username">
+                        <input type="text" id="username" class="form-control" placeholder="กรอก User ID (เช่น T0001)" required autocomplete="username">
                     </div>
                 </div>
                 
@@ -33,14 +33,6 @@ export function renderLoginScreen(phoneScreen, onLoginSuccess) {
                 
                 <button type="submit" class="login-btn">เข้าสู่ระบบ</button>
             </form>
-
-            <div class="auth-notice">
-                <p><strong>บัญชีสำหรับการทดสอบระบบ:</strong></p>
-                <p>ครู: <code>teacher1</code> / รหัสผ่าน: <code>123</code></p>
-                <p>นักเรียน 1: <code>student1</code> / รหัสผ่าน: <code>123</code></p>
-                <p>นักเรียน 2: <code>student2</code> / รหัสผ่าน: <code>123</code></p>
-                <p>ผู้ปกครอง: <code>parent1</code> / รหัสผ่าน: <code>123</code></p>
-            </div>
         </div>
     `;
 

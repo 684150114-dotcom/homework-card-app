@@ -18,87 +18,16 @@ const DB_KEY = 'homework_app_database';
 // ข้อมูลเริ่มต้นของระบบ (Default Seed Data)
 const defaultData = {
     users: {
-        'teacher1': { id: 'teacher1', name: 'ครูวิภาดา (ครูประจำชั้น)', role: 'teacher', pass: '123' },
-        'student1': { id: 'student1', name: 'เด็กชายสมชาย ใจดี', role: 'student', pass: '123', class: '1/1', parentId: 'parent1' },
-        'student2': { id: 'student2', name: 'เด็กหญิงสมหญิง รักเรียน', role: 'student', pass: '123', class: '1/1', parentId: null },
-        'parent1': { id: 'parent1', name: 'ผู้ปกครอง สมชาย', role: 'parent', pass: '123', linkedStudents: ['student1'] }
+        'T0001': { id: 'T0001', name: 'คุณครูผู้ดูแลระบบ', role: 'teacher', pass: '1304' }
     },
-    subjects: ["คณิตศาสตร์", "วิทยาศาสตร์", "ภาษาอังกฤษ", "ภาษาไทย", "ประวัติศาสตร์"],
-    homework: [
-        {
-            id: 'hw_1',
-            title: 'แบบฝึกหัดเรื่องเศษส่วน หน้า 10-12',
-            description: 'ให้นักเรียนทำโจทย์ข้อ 1-10 แสดงวิธีทำอย่างละเอียดในสมุดการบ้าน',
-            dueDate: new Date(Date.now() + 6 * 24 * 60 * 60 * 1000).toISOString(),
-            class: '1/1',
-            subject: 'คณิตศาสตร์',
-            rewardCard: true,
-            creator: 'teacher1',
-            firstSubmitter: null
-        },
-        {
-            id: 'hw_2',
-            title: 'รายงานการทดลองเรื่องการเติบโตของพืช',
-            description: 'วาดภาพการทดลอง สรุปผลการปลูกถั่วเขียวลงในกระดาษรายงาน',
-            dueDate: new Date(Date.now() + 4 * 24 * 60 * 60 * 1000).toISOString(),
-            class: '1/1',
-            subject: 'วิทยาศาสตร์',
-            rewardCard: false,
-            creator: 'teacher1',
-            firstSubmitter: null
-        },
-        {
-            id: 'hw_3',
-            title: 'เขียนบรรยาย My Family 50 คำ',
-            description: 'Write a short paragraph about your family and draw a family tree.',
-            dueDate: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString(),
-            class: '1/1',
-            subject: 'ภาษาอังกฤษ',
-            rewardCard: true,
-            creator: 'teacher1',
-            firstSubmitter: null
-        },
-        {
-            id: 'hw_4',
-            title: 'คัดลายมือบทอาขยาน เด็กเอ๋ยเด็กดี',
-            description: 'คัดลายมือตัวบรรจงเต็มบรรทัดลงในสมุดภาษาไทยจำนวน 2 จบ',
-            dueDate: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString(),
-            class: '1/1',
-            subject: 'ภาษาไทย',
-            rewardCard: false,
-            creator: 'teacher1',
-            firstSubmitter: null
-        }
-    ],
-    submissions: [
-        {
-            id: 'sub_1',
-            homeworkId: 'hw_2',
-            studentId: 'student2',
-            studentName: 'เด็กหญิงสมหญิง รักเรียน',
-            fileName: 'plant_experiment_report.pdf',
-            fileType: 'pdf',
-            fileUrl: 'https://drive.google.com/mock/plant_report.pdf',
-            submittedAt: new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString(),
-            grade: 9.5,
-            gradedAt: new Date(Date.now() - 10 * 60 * 60 * 1000).toISOString()
-        }
-    ],
-    missingAlerts: {
-        'student1': ['hw_4']
-    },
-    cards: [
-        { id: 'CARD-9821', type: 'LATE_SUBMIT_1D', name: 'การ์ดส่งงานช้า 1 วัน', ownerId: 'student1', usedForHomeworkId: null },
-        { id: 'CARD-4512', type: 'LATE_SUBMIT_1D', name: 'การ์ดส่งงานช้า 1 วัน', ownerId: 'student1', usedForHomeworkId: null },
-        { id: 'CARD-1290', type: 'LATE_SUBMIT_1D', name: 'การ์ดส่งงานช้า 1 วัน', ownerId: 'student2', usedForHomeworkId: null }
-    ],
-    delegations: [
-        { studentId: 'student2', class: '1/1', subject: 'ภาษาอังกฤษ' }
-    ],
+    subjects: ["คอมพิวเตอร์"],
+    homework: [],
+    submissions: [],
+    missingAlerts: {},
+    cards: [],
+    delegations: [],
     activeTrades: {},
-    mockGoogleDrive: [
-        { name: 'plant_experiment_report.pdf', student: 'เด็กหญิงสมหญิง รักเรียน', date: new Date(Date.now() - 12 * 60 * 60 * 1000).toLocaleDateString('th-TH') }
-    ]
+    mockGoogleDrive: []
 };
 
 // อ้างอิงตัวแปรฐานข้อมูล Cloud
@@ -273,7 +202,7 @@ function setupRealtimeSync() {
 async function seedCloudDatabase(force = false) {
     if (!dbCloud) return;
     try {
-        const docRef = doc(dbCloud, "users", "teacher1");
+        const docRef = doc(dbCloud, "users", "T0001");
         const docSnap = await getDoc(docRef);
         
         if (!docSnap.exists() || force) {
@@ -370,6 +299,24 @@ export function getStudentsInClass(classId) {
 }
 
 // อัปเดตรหัสผ่าน
+export function createUser(id, name, role, pass, classId = null) {
+    const db = loadDatabase();
+    if (db.users[id]) {
+        return { success: false, message: 'มี User ID นี้ในระบบอยู่แล้ว' };
+    }
+    const newUser = { id, name, role, pass };
+    if (role === 'student') {
+        newUser.class = classId || '1/1';
+        newUser.parentId = null;
+    } else if (role === 'parent') {
+        newUser.linkedStudents = [];
+    }
+    db.users[id] = newUser;
+    saveDatabase(db);
+    writeToCloud("users", id, newUser);
+    return { success: true, message: 'สร้างบัญชีผู้ใช้งานสำเร็จ!' };
+}
+
 export function updatePassword(userId, newPassword) {
     const db = loadDatabase();
     if (db.users[userId]) {

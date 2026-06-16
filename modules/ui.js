@@ -20,13 +20,15 @@ import {
     addHomework,
     updateSubjectName,
     addSubject,
-    deleteSubject
+    deleteSubject,
+    createUser,
+    resetDatabase
 } from './state.js';
 import { handleChangePassword } from './auth.js';
 import { renderCreateQRView, renderScanView } from './qr.js';
 
 // เก็บสถานะการทำงานภายในหน้า UI (UI View State)
-let activeSubjectTab = 'คณิตศาสตร์';
+let activeSubjectTab = 'คอมพิวเตอร์';
 let currentActiveView = 'homework'; // homework, grades, cards, settings, teacherSubmissions, teacherDelegation
 
 // บีบอัดรูปภาพด้วย HTML5 Canvas ให้ขนาดไม่เกิน 100KB (100 * 1024 bytes)
@@ -1310,6 +1312,34 @@ function renderSettingsMenu(container, user, phoneScreen) {
             <!-- ครูสามารถผูกบัญชีผู้ปกครองเพิ่มได้ -->
             ${user.role === 'teacher' ? `
                 <div class="settings-section">
+                    <h4><i class="fa-solid fa-user-plus"></i> เพิ่มบัญชีผู้ใช้ใหม่</h4>
+                    <div class="change-password-box">
+                        <div class="form-group" style="margin-bottom: 8px;">
+                            <select id="create-user-role" class="form-control" style="padding-left:12px; height: 38px;">
+                                <option value="student">นักเรียน (Student)</option>
+                                <option value="parent">ผู้ปกครอง (Parent)</option>
+                                <option value="teacher">ครู (Teacher)</option>
+                            </select>
+                        </div>
+                        <div class="form-group" style="margin-bottom: 8px;">
+                            <input type="text" id="create-user-id" class="form-control" style="padding-left:12px;" placeholder="User ID (เช่น S0001)" required>
+                        </div>
+                        <div class="form-group" style="margin-bottom: 8px;">
+                            <input type="text" id="create-user-name" class="form-control" style="padding-left:12px;" placeholder="ชื่อ-นามสกุลจริง" required>
+                        </div>
+                        <div class="form-group" style="margin-bottom: 8px;">
+                            <input type="password" id="create-user-pass" class="form-control" style="padding-left:12px;" placeholder="รหัสผ่านเข้าใช้งาน" required>
+                        </div>
+                        <div class="form-group" style="margin-bottom: 8px;" id="create-user-class-group">
+                            <input type="text" id="create-user-class" class="form-control" style="padding-left:12px;" placeholder="ห้องเรียน (เช่น 1/1)" value="1/1">
+                        </div>
+                        <button class="login-btn" id="submit-create-user-btn" style="margin: 0; padding: 8px; background: #2c2c2e; border-color: #2c2c2e;">
+                            <i class="fa-solid fa-plus"></i> สร้างผู้ใช้ใหม่
+                        </button>
+                    </div>
+                </div>
+
+                <div class="settings-section">
                     <h4><i class="fa-solid fa-people-roof"></i> เชื่อมต่อผู้ปกครอง - นักเรียน</h4>
                     <button class="use-card-btn" id="teacher-link-parent-btn" style="width: 100%; margin: 0; background: var(--primary-light); color: var(--primary-dark); border-color: var(--primary);">
                         <i class="fa-solid fa-link"></i> ผูกผู้ปกครองเข้ากับนักเรียน
@@ -1320,6 +1350,13 @@ function renderSettingsMenu(container, user, phoneScreen) {
                     <h4><i class="fa-solid fa-gift"></i> มอบของขวัญ / แจกการ์ดตรง</h4>
                     <button class="use-card-btn" id="teacher-gift-card-btn" style="width: 100%; margin: 0; background: #fff9db; color: #f59f00; border-color: #ffe066;">
                         <i class="fa-solid fa-gift"></i> มอบการ์ดส่งช้า 1 วันให้แก่นักเรียน
+                    </button>
+                </div>
+
+                <div class="settings-section">
+                    <h4><i class="fa-solid fa-rotate-left"></i> รีเซ็ตระบบ (อันตราย)</h4>
+                    <button class="use-card-btn" id="settings-reset-db-btn" style="width: 100%; margin: 0; background: #fff5f5; color: var(--danger); border-color: #ffe3e3;">
+                        <i class="fa-solid fa-rotate-left"></i> รีเซ็ตฐานข้อมูลทั้งหมด
                     </button>
                 </div>
             ` : ''}
@@ -1352,18 +1389,56 @@ function renderSettingsMenu(container, user, phoneScreen) {
         alert(res.message);
     };
 
+    // จัดการเปลี่ยนบทบาทในการสร้างผู้ใช้
+    const createUserRole = document.getElementById('create-user-role');
+    const createUserClassGroup = document.getElementById('create-user-class-group');
+    if (createUserRole && createUserClassGroup) {
+        createUserRole.onchange = () => {
+            if (createUserRole.value === 'student') {
+                createUserClassGroup.style.display = 'block';
+            } else {
+                createUserClassGroup.style.display = 'none';
+            }
+        };
+    }
+
+    // กดสร้างผู้ใช้ใหม่
+    const submitCreateUserBtn = document.getElementById('submit-create-user-btn');
+    if (submitCreateUserBtn) {
+        submitCreateUserBtn.onclick = () => {
+            const role = document.getElementById('create-user-role').value;
+            const id = document.getElementById('create-user-id').value.trim();
+            const name = document.getElementById('create-user-name').value.trim();
+            const pass = document.getElementById('create-user-pass').value.trim();
+            const classId = document.getElementById('create-user-class') ? document.getElementById('create-user-class').value.trim() : null;
+
+            if (!id || !name || !pass) {
+                alert('กรุณากรอกข้อมูลให้ครบถ้วน');
+                return;
+            }
+
+            const res = createUser(id, name, role, pass, classId);
+            alert(res.message);
+            if (res.success) {
+                document.getElementById('create-user-id').value = '';
+                document.getElementById('create-user-name').value = '';
+                document.getElementById('create-user-pass').value = '';
+            }
+        };
+    }
+
     // ปุ่มของครู: ผูกผู้ปกครองเข้ากับนักเรียน
     const linkBtn = document.getElementById('teacher-link-parent-btn');
     if (linkBtn) {
         linkBtn.onclick = () => {
             const students = getStudentsInClass('1/1');
             const studentChoices = students.map(s => `${s.id}: ${s.name}`).join('\n');
-            const targetStudentId = prompt(`กรอก ID นักเรียนที่ต้องการผูก:\n\n${studentChoices}`, 'student1');
+            const targetStudentId = prompt(`กรอก ID นักเรียนที่ต้องการผูก:\n\n${studentChoices}`, '');
             
             if (targetStudentId && db.users[targetStudentId]) {
                 const parents = Object.values(db.users).filter(u => u.role === 'parent');
                 const parentChoices = parents.map(p => `${p.id}: ${p.name}`).join('\n');
-                const targetParentId = prompt(`กรอก ID ผู้ปกครองที่จะผูกกับนักเรียนคนดังกล่าว:\n\n${parentChoices}`, 'parent1');
+                const targetParentId = prompt(`กรอก ID ผู้ปกครองที่จะผูกกับนักเรียนคนดังกล่าว:\n\n${parentChoices}`, '');
                 
                 if (targetParentId && db.users[targetParentId]) {
                     const pUser = db.users[targetParentId];
@@ -1386,12 +1461,22 @@ function renderSettingsMenu(container, user, phoneScreen) {
         giftBtn.onclick = () => {
             const students = getStudentsInClass('1/1');
             const studentChoices = students.map(s => `${s.id}: ${s.name}`).join('\n');
-            const targetStudentId = prompt(`เลือก ID นักเรียนที่ต้องการแจกการ์ดส่งงานช้าให้:\n\n${studentChoices}`, 'student1');
+            const targetStudentId = prompt(`เลือก ID นักเรียนที่ต้องการแจกการ์ดส่งงานช้าให้:\n\n${studentChoices}`, '');
 
             if (targetStudentId && db.users[targetStudentId]) {
                 const card = teacherGiveCardToStudent(targetStudentId);
                 alert(`แจกการ์ดสำเร็จ! มอบ "${card.name}" แก่ ${db.users[targetStudentId].name} เรียบร้อย (รหัสการ์ด: ${card.id})`);
                 updateSystemStats();
+            }
+        };
+    }
+
+    // ปุ่มของครู: รีเซ็ตฐานข้อมูลทั้งหมด
+    const resetDbBtn = document.getElementById('settings-reset-db-btn');
+    if (resetDbBtn) {
+        resetDbBtn.onclick = () => {
+            if (confirm("ต้องการรีเซ็ตข้อมูลทั้งหมดกลับสู่ค่าเริ่มต้นใช่หรือไม่? บัญชีผู้ใช้ที่สร้างใหม่และการบ้านทั้งหมดจะถูกลบ")) {
+                resetDatabase();
             }
         };
     }
