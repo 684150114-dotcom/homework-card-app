@@ -41,7 +41,19 @@ export function loadDatabase() {
         return defaultData;
     }
     try {
-        return JSON.parse(data);
+        const parsed = JSON.parse(data);
+        // หากไม่มีบัญชีแอดมิน T0001 ใน LocalStorage ให้ทำการล้างค่าเป็นระบบจริง
+        if (!parsed.users || !parsed.users['T0001']) {
+            console.log("Old simulation database detected. Resetting to production defaults...");
+            saveDatabase(defaultData);
+            return defaultData;
+        }
+        // ตรวจสอบและบังคับให้รหัสผ่าน T0001 เป็น '1304' เพื่อแก้ไขปัญหารหัสเก่าค้างใช้งานไม่ได้
+        if (parsed.users['T0001'].pass !== '1304') {
+            parsed.users['T0001'].pass = '1304';
+            saveDatabase(parsed);
+        }
+        return parsed;
     } catch (e) {
         console.error("Error parsing database, resetting to default", e);
         saveDatabase(defaultData);

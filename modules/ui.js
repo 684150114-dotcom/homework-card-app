@@ -1327,8 +1327,9 @@ function renderSettingsMenu(container, user, phoneScreen) {
                         <div class="form-group" style="margin-bottom: 8px;">
                             <input type="text" id="create-user-name" class="form-control" style="padding-left:12px;" placeholder="ชื่อ-นามสกุลจริง" required>
                         </div>
-                        <div class="form-group" style="margin-bottom: 8px;">
-                            <input type="password" id="create-user-pass" class="form-control" style="padding-left:12px;" placeholder="รหัสผ่านเข้าใช้งาน" required>
+                        <div class="form-group" style="margin-bottom: 8px; position: relative; display: flex; align-items: center;">
+                            <input type="password" id="create-user-pass" class="form-control" style="padding-left:12px; padding-right: 40px;" placeholder="รหัสผ่านเข้าใช้งาน" required>
+                            <i class="fa-solid fa-eye-slash" id="toggle-create-user-pass" style="position: absolute; right: 14px; cursor: pointer; color: var(--gray);"></i>
                         </div>
                         <div class="form-group" style="margin-bottom: 8px;" id="create-user-class-group">
                             <input type="text" id="create-user-class" class="form-control" style="padding-left:12px;" placeholder="ห้องเรียน (เช่น 1/1)" value="1/1">
@@ -1366,17 +1367,70 @@ function renderSettingsMenu(container, user, phoneScreen) {
                 <h4><i class="fa-solid fa-shield-halved"></i> แก้ไขรหัสผ่าน</h4>
                 
                 <div class="change-password-box">
-                    <div class="form-group" style="margin-bottom: 8px;">
-                        <input type="password" id="old-pass" class="form-control" style="padding-left:12px;" placeholder="รหัสผ่านปัจจุบัน" required autocomplete="current-password">
+                    <div class="form-group" style="margin-bottom: 8px; position: relative; display: flex; align-items: center;">
+                        <input type="password" id="old-pass" class="form-control" style="padding-left:12px; padding-right: 40px;" placeholder="รหัสผ่านปัจจุบัน" required autocomplete="current-password">
+                        <i class="fa-solid fa-eye-slash" id="toggle-old-pass" style="position: absolute; right: 14px; cursor: pointer; color: var(--gray);"></i>
                     </div>
-                    <div class="form-group" style="margin-bottom: 8px;">
-                        <input type="password" id="new-pass" class="form-control" style="padding-left:12px;" placeholder="รหัสผ่านใหม่" required autocomplete="new-password">
+                    <div class="form-group" style="margin-bottom: 8px; position: relative; display: flex; align-items: center;">
+                        <input type="password" id="new-pass" class="form-control" style="padding-left:12px; padding-right: 40px;" placeholder="รหัสผ่านใหม่" required autocomplete="new-password">
+                        <i class="fa-solid fa-eye-slash" id="toggle-new-pass" style="position: absolute; right: 14px; cursor: pointer; color: var(--gray);"></i>
                     </div>
                     <button class="login-btn" id="submit-change-pass-btn" style="margin: 0; padding: 8px;">ยืนยันการเปลี่ยนรหัสผ่าน</button>
                 </div>
             </div>
         </div>
     `;
+
+    // ผูกการแสดง/ซ่อนรหัสผ่านสำหรับการสร้างผู้ใช้ใหม่
+    const toggleCreatePass = document.getElementById('toggle-create-user-pass');
+    const createPassInput = document.getElementById('create-user-pass');
+    if (toggleCreatePass && createPassInput) {
+        toggleCreatePass.onclick = () => {
+            if (createPassInput.type === 'password') {
+                createPassInput.type = 'text';
+                toggleCreatePass.classList.remove('fa-eye-slash');
+                toggleCreatePass.classList.add('fa-eye');
+            } else {
+                createPassInput.type = 'password';
+                toggleCreatePass.classList.remove('fa-eye');
+                toggleCreatePass.classList.add('fa-eye-slash');
+            }
+        };
+    }
+
+    // ผูกการแสดง/ซ่อนรหัสผ่านเดิม
+    const toggleOldPass = document.getElementById('toggle-old-pass');
+    const oldPassInput = document.getElementById('old-pass');
+    if (toggleOldPass && oldPassInput) {
+        toggleOldPass.onclick = () => {
+            if (oldPassInput.type === 'password') {
+                oldPassInput.type = 'text';
+                toggleOldPass.classList.remove('fa-eye-slash');
+                toggleOldPass.classList.add('fa-eye');
+            } else {
+                oldPassInput.type = 'password';
+                toggleOldPass.classList.remove('fa-eye');
+                toggleOldPass.classList.add('fa-eye-slash');
+            }
+        };
+    }
+
+    // ผูกการแสดง/ซ่อนรหัสผ่านใหม่
+    const toggleNewPass = document.getElementById('toggle-new-pass');
+    const newPassInput = document.getElementById('new-pass');
+    if (toggleNewPass && newPassInput) {
+        toggleNewPass.onclick = () => {
+            if (newPassInput.type === 'password') {
+                newPassInput.type = 'text';
+                toggleNewPass.classList.remove('fa-eye-slash');
+                toggleNewPass.classList.add('fa-eye');
+            } else {
+                newPassInput.type = 'password';
+                toggleNewPass.classList.remove('fa-eye');
+                toggleNewPass.classList.add('fa-eye-slash');
+            }
+        };
+    }
 
     // การเปลี่ยนรหัสผ่าน
     document.getElementById('submit-change-pass-btn').onclick = () => {
