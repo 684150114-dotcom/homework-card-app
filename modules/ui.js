@@ -284,6 +284,7 @@ function renderActiveView(phoneScreen, user) {
 // 2. เรนเดอร์เมนู: รายการการบ้าน (เรียงตามกำหนดส่ง, มีระบบแท็บรายวิชา)
 // -------------------------------------------------------------
 function renderHomeworkTab(container, user, studentId, classId, phoneScreen) {
+    container.innerHTML = "";
     const db = loadDatabase();
 
     // ---- แถบเลือกห้องเรียนสำหรับครู ----
