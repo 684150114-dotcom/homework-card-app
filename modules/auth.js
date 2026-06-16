@@ -19,7 +19,7 @@ export function renderLoginScreen(phoneScreen, onLoginSuccess) {
                     <label for="username">User ID</label>
                     <div class="form-control-wrapper">
                         <i class="fa-solid fa-user"></i>
-                        <input type="text" id="username" class="form-control" placeholder="กรอก User ID (เช่น M000)" required autocomplete="username">
+                        <input type="text" id="username" class="form-control" placeholder="กรอก User ID" required autocomplete="username">
                     </div>
                 </div>
                 
