@@ -1,0 +1,764 @@
+// --- Data Store & State Management (LocalStorage & Real-time Firebase Firestore Sync) ---
+import { CONFIG } from '../config.js';
+
+// นำเข้า Firebase Web SDK จาก CDN
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+import { 
+    getFirestore, 
+    collection, 
+    doc, 
+    getDoc, 
+    setDoc, 
+    deleteDoc, 
+    onSnapshot 
+} from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+
+const DB_KEY = 'homework_app_database';
+
+// ข้อมูลเริ่มต้นของระบบ (Default Seed Data)
+const defaultData = {
+    users: {
+        'teacher1': { id: 'teacher1', name: 'ครูวิภาดา (ครูประจำชั้น)', role: 'teacher', pass: '123' },
+        'student1': { id: 'student1', name: 'เด็กชายสมชาย ใจดี', role: 'student', pass: '123', class: '1/1', parentId: 'parent1' },
+        'student2': { id: 'student2', name: 'เด็กหญิงสมหญิง รักเรียน', role: 'student', pass: '123', class: '1/1', parentId: null },
+        'parent1': { id: 'parent1', name: 'ผู้ปกครอง สมชาย', role: 'parent', pass: '123', linkedStudents: ['student1'] }
+    },
+    subjects: ["คณิตศาสตร์", "วิทยาศาสตร์", "ภาษาอังกฤษ", "ภาษาไทย", "ประวัติศาสตร์"],
+    homework: [
+        {
+            id: 'hw_1',
+            title: 'แบบฝึกหัดเรื่องเศษส่วน หน้า 10-12',
+            description: 'ให้นักเรียนทำโจทย์ข้อ 1-10 แสดงวิธีทำอย่างละเอียดในสมุดการบ้าน',
+            dueDate: new Date(Date.now() + 6 * 24 * 60 * 60 * 1000).toISOString(),
+            class: '1/1',
+            subject: 'คณิตศาสตร์',
+            rewardCard: true,
+            creator: 'teacher1',
+            firstSubmitter: null
+        },
+        {
+            id: 'hw_2',
+            title: 'รายงานการทดลองเรื่องการเติบโตของพืช',
+            description: 'วาดภาพการทดลอง สรุปผลการปลูกถั่วเขียวลงในกระดาษรายงาน',
+            dueDate: new Date(Date.now() + 4 * 24 * 60 * 60 * 1000).toISOString(),
+            class: '1/1',
+            subject: 'วิทยาศาสตร์',
+            rewardCard: false,
+            creator: 'teacher1',
+            firstSubmitter: null
+        },
+        {
+            id: 'hw_3',
+            title: 'เขียนบรรยาย My Family 50 คำ',
+            description: 'Write a short paragraph about your family and draw a family tree.',
+            dueDate: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString(),
+            class: '1/1',
+            subject: 'ภาษาอังกฤษ',
+            rewardCard: true,
+            creator: 'teacher1',
+            firstSubmitter: null
+        },
+        {
+            id: 'hw_4',
+            title: 'คัดลายมือบทอาขยาน เด็กเอ๋ยเด็กดี',
+            description: 'คัดลายมือตัวบรรจงเต็มบรรทัดลงในสมุดภาษาไทยจำนวน 2 จบ',
+            dueDate: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString(),
+            class: '1/1',
+            subject: 'ภาษาไทย',
+            rewardCard: false,
+            creator: 'teacher1',
+            firstSubmitter: null
+        }
+    ],
+    submissions: [
+        {
+            id: 'sub_1',
+            homeworkId: 'hw_2',
+            studentId: 'student2',
+            studentName: 'เด็กหญิงสมหญิง รักเรียน',
+            fileName: 'plant_experiment_report.pdf',
+            fileType: 'pdf',
+            fileUrl: 'https://drive.google.com/mock/plant_report.pdf',
+            submittedAt: new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString(),
+            grade: 9.5,
+            gradedAt: new Date(Date.now() - 10 * 60 * 60 * 1000).toISOString()
+        }
+    ],
+    missingAlerts: {
+        'student1': ['hw_4']
+    },
+    cards: [
+        { id: 'CARD-9821', type: 'LATE_SUBMIT_1D', name: 'การ์ดส่งงานช้า 1 วัน', ownerId: 'student1', usedForHomeworkId: null },
+        { id: 'CARD-4512', type: 'LATE_SUBMIT_1D', name: 'การ์ดส่งงานช้า 1 วัน', ownerId: 'student1', usedForHomeworkId: null },
+        { id: 'CARD-1290', type: 'LATE_SUBMIT_1D', name: 'การ์ดส่งงานช้า 1 วัน', ownerId: 'student2', usedForHomeworkId: null }
+    ],
+    delegations: [
+        { studentId: 'student2', class: '1/1', subject: 'ภาษาอังกฤษ' }
+    ],
+    activeTrades: {},
+    mockGoogleDrive: [
+        { name: 'plant_experiment_report.pdf', student: 'เด็กหญิงสมหญิง รักเรียน', date: new Date(Date.now() - 12 * 60 * 60 * 1000).toLocaleDateString('th-TH') }
+    ]
+};
+
+// อ้างอิงตัวแปรฐานข้อมูล Cloud
+let dbCloud = null;
+
+// โหลดฐานข้อมูลจาก LocalStorage
+export function loadDatabase() {
+    const data = localStorage.getItem(DB_KEY);
+    if (!data) {
+        saveDatabase(defaultData);
+        return defaultData;
+    }
+    try {
+        return JSON.parse(data);
+    } catch (e) {
+        console.error("Error parsing database, resetting to default", e);
+        saveDatabase(defaultData);
+        return defaultData;
+    }
+}
+
+// บันทึกฐานข้อมูลลง LocalStorage
+export function saveDatabase(data) {
+    localStorage.setItem(DB_KEY, JSON.stringify(data));
+}
+
+// รีเซ็ตฐานข้อมูล (รองรับรีเซ็ตทั้ง Local และ Cloud)
+export function resetDatabase() {
+    saveDatabase(defaultData);
+    if (CONFIG.useFirebase && dbCloud) {
+        // หากเปิดใช้งานคลาวด์ ให้ลบระบุชื่อตัวอย่างแล้วเซ็ตใหม่
+        seedCloudDatabase(true);
+    } else {
+        window.location.reload();
+    }
+}
+
+// --- ฟังก์ชันบันทึกและลบข้อมูลจาก Firebase (Cloud Helpers) ---
+
+function writeToCloud(collectionName, docId, data) {
+    if (!CONFIG.useFirebase || !dbCloud) return;
+    setDoc(doc(dbCloud, collectionName, docId), data)
+        .catch(e => console.error(`Cloud write failed on ${collectionName}/${docId}`, e));
+}
+
+function deleteFromCloud(collectionName, docId) {
+    if (!CONFIG.useFirebase || !dbCloud) return;
+    deleteDoc(doc(dbCloud, collectionName, docId))
+        .catch(e => console.error(`Cloud delete failed on ${collectionName}/${docId}`, e));
+}
+
+// -------------------------------------------------------------
+// 🔄 ระบบ Sync ข้อมูลสองทางเรียลไทม์ (Real-time Dual Sync Engine)
+// -------------------------------------------------------------
+function setupRealtimeSync() {
+    if (!dbCloud) return;
+
+    const triggerUIUpdate = () => {
+        window.dispatchEvent(new Event('db_updated'));
+    };
+
+    // 1. ดึงข้อมูลและฟังความเปลี่ยนแปลง: ผู้ใช้งาน
+    onSnapshot(collection(dbCloud, "users"), (snapshot) => {
+        const db = loadDatabase();
+        snapshot.forEach((doc) => {
+            db.users[doc.id] = doc.data();
+        });
+        saveDatabase(db);
+        triggerUIUpdate();
+    });
+
+    // 2. ดึงข้อมูลและฟังความเปลี่ยนแปลง: รายวิชา
+    onSnapshot(collection(dbCloud, "subjects"), (snapshot) => {
+        const db = loadDatabase();
+        const subjects = [];
+        snapshot.forEach((doc) => {
+            subjects.push(doc.data().name);
+        });
+        if (subjects.length > 0) {
+            db.subjects = subjects;
+            saveDatabase(db);
+            triggerUIUpdate();
+        }
+    });
+
+    // 3. ดึงข้อมูลและฟังความเปลี่ยนแปลง: รายการการบ้าน
+    onSnapshot(collection(dbCloud, "homework"), (snapshot) => {
+        const db = loadDatabase();
+        const homework = [];
+        snapshot.forEach((doc) => {
+            homework.push({ id: doc.id, ...doc.data() });
+        });
+        db.homework = homework;
+        saveDatabase(db);
+        triggerUIUpdate();
+    });
+
+    // 4. ดึงข้อมูลและฟังความเปลี่ยนแปลง: บันทึกการส่งงาน
+    onSnapshot(collection(dbCloud, "submissions"), (snapshot) => {
+        const db = loadDatabase();
+        const submissions = [];
+        snapshot.forEach((doc) => {
+            submissions.push({ id: doc.id, ...doc.data() });
+        });
+        db.submissions = submissions;
+        saveDatabase(db);
+        triggerUIUpdate();
+    });
+
+    // 5. ดึงข้อมูลและฟังความเปลี่ยนแปลง: การแจ้งเตือนสีแดง (Missing Alerts)
+    onSnapshot(collection(dbCloud, "missingAlerts"), (snapshot) => {
+        const db = loadDatabase();
+        const missingAlerts = {};
+        snapshot.forEach((doc) => {
+            missingAlerts[doc.id] = doc.data().homeworkIds || [];
+        });
+        db.missingAlerts = missingAlerts;
+        saveDatabase(db);
+        triggerUIUpdate();
+    });
+
+    // 6. ดึงข้อมูลและฟังความเปลี่ยนแปลง: การ์ดของนักเรียน
+    onSnapshot(collection(dbCloud, "cards"), (snapshot) => {
+        const db = loadDatabase();
+        const cards = [];
+        snapshot.forEach((doc) => {
+            cards.push({ id: doc.id, ...doc.data() });
+        });
+        db.cards = cards;
+        saveDatabase(db);
+        triggerUIUpdate();
+    });
+
+    // 7. ดึงข้อมูลและฟังความเปลี่ยนแปลง: การมอบอำนาจตัวแทน
+    onSnapshot(collection(dbCloud, "delegations"), (snapshot) => {
+        const db = loadDatabase();
+        const delegations = [];
+        snapshot.forEach((doc) => {
+            delegations.push(doc.data());
+        });
+        db.delegations = delegations;
+        saveDatabase(db);
+        triggerUIUpdate();
+    });
+
+    // 8. ดึงข้อมูลและฟังความเปลี่ยนแปลง: QR โอนการ์ด
+    onSnapshot(collection(dbCloud, "activeTrades"), (snapshot) => {
+        const db = loadDatabase();
+        const activeTrades = {};
+        snapshot.forEach((doc) => {
+            activeTrades[doc.id] = doc.data();
+        });
+        db.activeTrades = activeTrades;
+        saveDatabase(db);
+        triggerUIUpdate();
+    });
+
+    // 9. ดึงข้อมูลและฟังความเปลี่ยนแปลง: Google Drive Logs
+    onSnapshot(collection(dbCloud, "mockGoogleDrive"), (snapshot) => {
+        const db = loadDatabase();
+        const mockGoogleDrive = [];
+        snapshot.forEach((doc) => {
+            mockGoogleDrive.push(doc.data());
+        });
+        db.mockGoogleDrive = mockGoogleDrive;
+        saveDatabase(db);
+        triggerUIUpdate();
+    });
+}
+
+// เช็คและอัปโหลดข้อมูลเริ่มต้นขึ้น Firebase (Auto Seed)
+async function seedCloudDatabase(force = false) {
+    if (!dbCloud) return;
+    try {
+        const docRef = doc(dbCloud, "users", "teacher1");
+        const docSnap = await getDoc(docRef);
+        
+        if (!docSnap.exists() || force) {
+            console.log("Seeding default/reset dataset to Cloud Firestore...");
+            
+            // อัปโหลดข้อมูลรายชื่อนักเรียน/ครู
+            for (const [userId, userObj] of Object.entries(defaultData.users)) {
+                await setDoc(doc(dbCloud, "users", userId), userObj);
+            }
+            // อัปโหลดรายวิชา
+            for (const subj of defaultData.subjects) {
+                await setDoc(doc(dbCloud, "subjects", subj), { name: subj });
+            }
+            // อัปโหลดการบ้าน
+            for (const hw of defaultData.homework) {
+                await setDoc(doc(dbCloud, "homework", hw.id), hw);
+            }
+            // อัปโหลดการส่งการบ้าน
+            for (const sub of defaultData.submissions) {
+                await setDoc(doc(dbCloud, "submissions", sub.id), sub);
+            }
+            // อัปโหลดการ์ด
+            for (const card of defaultData.cards) {
+                await setDoc(doc(dbCloud, "cards", card.id), card);
+            }
+            // อัปโหลดกฎตัวแทนผู้สั่งงาน
+            for (const del of defaultData.delegations) {
+                const delId = `${del.studentId}_${del.class.replace('/', '-')}_${del.subject}`;
+                await setDoc(doc(dbCloud, "delegations", delId), del);
+            }
+            // อัปโหลดรายงานการแจ้งเตือนแดง
+            for (const [studentId, hwIds] of Object.entries(defaultData.missingAlerts)) {
+                await setDoc(doc(dbCloud, "missingAlerts", studentId), { homeworkIds: hwIds });
+            }
+            // อัปโหลดไฟล์ประวัติไดรฟ์ของครู
+            for (const driveItem of defaultData.mockGoogleDrive) {
+                const logId = `drive_log_${Date.now()}_${Math.floor(Math.random() * 100)}`;
+                await setDoc(doc(dbCloud, "mockGoogleDrive", logId), driveItem);
+            }
+            
+            console.log("Cloud Firestore Seeding completed successfully!");
+            if (force) window.location.reload();
+        }
+    } catch (e) {
+        console.warn("Seeding cloud database failed (probably using default/unconfigured API key):", e);
+    }
+}
+
+// เริ่มระบบเชื่อมต่อคลาวด์ตามการเปิดสวิตช์ใน config
+if (CONFIG.useFirebase) {
+    try {
+        const app = initializeApp(CONFIG.firebaseConfig);
+        dbCloud = getFirestore(app);
+        
+        // รันการฟังข้อมูลเรียลไทม์
+        setupRealtimeSync();
+        // ตรวจสอบและอัปโหลดเมล็ดข้อมูลเริ่มต้น
+        seedCloudDatabase();
+    } catch (e) {
+        console.error("Firebase SDK initialization failed", e);
+    }
+}
+
+// --- ฟังก์ชันการจัดการผู้ใช้งาน (User & Authentication) ---
+
+// ตรวจสอบล็อกอิน
+export function login(username, password) {
+    const db = loadDatabase();
+    const user = db.users[username];
+    if (user && user.pass === password) {
+        localStorage.setItem('current_user_id', user.id);
+        return user;
+    }
+    return null;
+}
+
+// ล็อกเอาต์
+export function logout() {
+    localStorage.removeItem('current_user_id');
+}
+
+// ดึงข้อมูลผู้ใช้ปัจจุบัน
+export function getCurrentUser() {
+    const userId = localStorage.getItem('current_user_id');
+    if (!userId) return null;
+    const db = loadDatabase();
+    return db.users[userId] || null;
+}
+
+// ดึงรายชื่อนักเรียนในห้อง
+export function getStudentsInClass(classId) {
+    const db = loadDatabase();
+    return Object.values(db.users).filter(u => u.role === 'student' && u.class === classId);
+}
+
+// อัปเดตรหัสผ่าน
+export function updatePassword(userId, newPassword) {
+    const db = loadDatabase();
+    if (db.users[userId]) {
+        db.users[userId].pass = newPassword;
+        saveDatabase(db);
+        
+        // เขียนขึ้นคลาวด์
+        writeToCloud("users", userId, db.users[userId]);
+        return true;
+    }
+    return false;
+}
+
+// --- ฟังก์ชันการจัดการวิชาและแท็บ ---
+
+export function updateSubjectName(oldName, newName) {
+    const db = loadDatabase();
+    const index = db.subjects.indexOf(oldName);
+    if (index !== -1 && newName && !db.subjects.includes(newName)) {
+        db.subjects[index] = newName;
+        
+        // อัปเดตการบ้านในวิชาที่เปลี่ยน
+        db.homework.forEach(hw => {
+            if (hw.subject === oldName) {
+                hw.subject = newName;
+                writeToCloud("homework", hw.id, hw);
+            }
+        });
+        // อัปเดตสิทธิ์ตัวแทน
+        db.delegations.forEach(del => {
+            if (del.subject === oldName) {
+                const oldDelId = `${del.studentId}_${del.class.replace('/', '-')}_${oldName}`;
+                deleteFromCloud("delegations", oldDelId);
+
+                del.subject = newName;
+                const newDelId = `${del.studentId}_${del.class.replace('/', '-')}_${newName}`;
+                writeToCloud("delegations", newDelId, del);
+            }
+        });
+
+        // ลบวิชาเดิมจากคลาวด์ และแทนที่ด้วยตัวใหม่
+        deleteFromCloud("subjects", oldName);
+        writeToCloud("subjects", newName, { name: newName });
+
+        saveDatabase(db);
+        return true;
+    }
+    return false;
+}
+
+export function addSubject(name) {
+    const db = loadDatabase();
+    if (name && !db.subjects.includes(name)) {
+        db.subjects.push(name);
+        saveDatabase(db);
+        
+        writeToCloud("subjects", name, { name });
+        return true;
+    }
+    return false;
+}
+
+export function deleteSubject(name) {
+    const db = loadDatabase();
+    db.subjects = db.subjects.filter(s => s !== name);
+    saveDatabase(db);
+    
+    deleteFromCloud("subjects", name);
+}
+
+// --- ฟังก์ชันการจัดการการบ้าน (Homework) ---
+
+export function addHomework(title, description, dueDate, subject, classId, rewardCard, creatorId) {
+    const db = loadDatabase();
+    const newHw = {
+        id: 'hw_' + Date.now(),
+        title,
+        description,
+        dueDate: new Date(dueDate).toISOString(),
+        class: classId,
+        subject,
+        rewardCard: !!rewardCard,
+        creator: creatorId,
+        firstSubmitter: null
+    };
+    db.homework.push(newHw);
+    saveDatabase(db);
+
+    writeToCloud("homework", newHw.id, newHw);
+    return newHw;
+}
+
+export function getHomeworkForStudent(studentId, classId, subject, status = 'pending') {
+    const db = loadDatabase();
+    const student = db.users[studentId];
+    if (!student) return [];
+
+    const submittedHwIds = db.submissions
+        .filter(sub => sub.studentId === studentId)
+        .map(sub => sub.homeworkId);
+
+    let filteredHw = db.homework.filter(hw => hw.class === classId && hw.subject === subject);
+
+    if (status === 'pending') {
+        filteredHw = filteredHw.filter(hw => !submittedHwIds.includes(hw.id));
+    } else {
+        filteredHw = filteredHw.filter(hw => submittedHwIds.includes(hw.id));
+    }
+
+    return sortHomeworkList(filteredHw, studentId, db);
+}
+
+export function getSubmittedHomeworkForStudent(studentId) {
+    const db = loadDatabase();
+    const submittedHwIds = db.submissions
+        .filter(sub => sub.studentId === studentId)
+        .map(sub => sub.homeworkId);
+
+    return db.homework.filter(hw => submittedHwIds.includes(hw.id));
+}
+
+function sortHomeworkList(homeworks, studentId, db) {
+    const studentAlerts = db.missingAlerts[studentId] || [];
+
+    return [...homeworks].sort((a, b) => {
+        const aAlert = studentAlerts.includes(a.id);
+        const bAlert = studentAlerts.includes(b.id);
+
+        if (aAlert && !bAlert) return -1;
+        if (!aAlert && bAlert) return 1;
+
+        return new Date(a.dueDate) - new Date(b.dueDate);
+    });
+}
+
+export function isHomeworkAlerted(homeworkId, studentId) {
+    const db = loadDatabase();
+    const alerts = db.missingAlerts[studentId] || [];
+    return alerts.includes(homeworkId);
+}
+
+// --- ฟังก์ชันการส่งงานและการตรวจงาน (Submission & Grading) ---
+
+export function submitHomework(homeworkId, studentId, fileType, fileName, fileContent) {
+    const db = loadDatabase();
+    const student = db.users[studentId];
+    if (!student) return null;
+
+    const homework = db.homework.find(h => h.id === homeworkId);
+    let earnRewardCard = false;
+    let cardReceived = null;
+
+    if (homework && !homework.firstSubmitter) {
+        homework.firstSubmitter = studentId;
+        
+        // ถ้าแจกการ์ดให้คนแรก
+        if (homework.rewardCard) {
+            earnRewardCard = true;
+            const newCardId = 'CARD-' + Math.floor(1000 + Math.random() * 9000);
+            cardReceived = {
+                id: newCardId,
+                type: 'LATE_SUBMIT_1D',
+                name: 'การ์ดส่งงานช้า 1 วัน',
+                ownerId: studentId,
+                usedForHomeworkId: null
+            };
+            db.cards.push(cardReceived);
+            writeToCloud("cards", cardReceived.id, cardReceived);
+        }
+        writeToCloud("homework", homework.id, homework);
+    }
+
+    // ลบการแจ้งเตือนแดงเมื่อส่ง
+    if (db.missingAlerts[studentId]) {
+        db.missingAlerts[studentId] = db.missingAlerts[studentId].filter(id => id !== homeworkId);
+        writeToCloud("missingAlerts", studentId, { homeworkIds: db.missingAlerts[studentId] });
+    }
+
+    // สร้างข้อมูลส่งงาน
+    const newSubmission = {
+        id: 'sub_' + Date.now(),
+        homeworkId,
+        studentId,
+        studentName: student.name,
+        fileName,
+        fileType,
+        fileUrl: fileType === 'link' ? fileContent : `https://drive.google.com/mock/${studentId}_${Date.now()}_${fileName}`,
+        submittedAt: new Date().toISOString(),
+        grade: null,
+        gradedAt: null
+    };
+    db.submissions.push(newSubmission);
+    writeToCloud("submissions", newSubmission.id, newSubmission);
+
+    // ล็อกอัพโหลดลง Google Drive ของครู
+    const driveLog = {
+        name: fileName,
+        student: student.name,
+        date: new Date().toLocaleDateString('th-TH') + ' ' + new Date().toLocaleTimeString('th-TH')
+    };
+    db.mockGoogleDrive.unshift(driveLog);
+    
+    const logId = `drive_log_${Date.now()}`;
+    writeToCloud("mockGoogleDrive", logId, driveLog);
+
+    saveDatabase(db);
+    return { submission: newSubmission, earnRewardCard, cardReceived };
+}
+
+export function getSubmissionsForHomework(homeworkId) {
+    const db = loadDatabase();
+    return db.submissions.filter(sub => sub.homeworkId === homeworkId);
+}
+
+export function gradeSubmission(submissionId, gradeValue) {
+    const db = loadDatabase();
+    const submission = db.submissions.find(sub => sub.id === submissionId);
+    if (submission) {
+        submission.grade = parseFloat(gradeValue);
+        submission.gradedAt = new Date().toISOString();
+        saveDatabase(db);
+
+        writeToCloud("submissions", submission.id, submission);
+        return true;
+    }
+    return false;
+}
+
+export function toggleMissingAlert(homeworkId, studentId) {
+    const db = loadDatabase();
+    if (!db.missingAlerts[studentId]) {
+        db.missingAlerts[studentId] = [];
+    }
+
+    const index = db.missingAlerts[studentId].indexOf(homeworkId);
+    let alerted = false;
+    
+    if (index === -1) {
+        db.missingAlerts[studentId].push(homeworkId);
+        alerted = true;
+    } else {
+        db.missingAlerts[studentId].splice(index, 1);
+    }
+
+    saveDatabase(db);
+    writeToCloud("missingAlerts", studentId, { homeworkIds: db.missingAlerts[studentId] });
+    return alerted;
+}
+
+// --- ฟังก์ชันเมนูคะแนน (#Grades) ---
+
+export function getGradesForStudent(studentId) {
+    const db = loadDatabase();
+    const studentSubmissions = db.submissions.filter(sub => sub.studentId === studentId && sub.grade !== null);
+    
+    const subjectGrades = {};
+    db.subjects.forEach(sub => {
+        subjectGrades[sub] = [];
+    });
+
+    studentSubmissions.forEach(sub => {
+        const hw = db.homework.find(h => h.id === sub.homeworkId);
+        if (hw && subjectGrades[hw.subject]) {
+            subjectGrades[hw.subject].push({
+                homeworkTitle: hw.title,
+                grade: sub.grade,
+                gradedAt: sub.gradedAt
+            });
+        }
+    });
+
+    return subjectGrades;
+}
+
+// --- ฟังก์ชันการ์ดและระบบแลกเปลี่ยนการ์ด ---
+
+export function getStudentCards(studentId) {
+    const db = loadDatabase();
+    return db.cards.filter(card => card.ownerId === studentId && card.usedForHomeworkId === null);
+}
+
+export function useLateSubmissionCard(studentId, homeworkId) {
+    const db = loadDatabase();
+    
+    const card = db.cards.find(c => c.ownerId === studentId && c.usedForHomeworkId === null);
+    if (!card) return { success: false, message: 'คุณไม่มีการ์ดส่งงานช้าเหลืออยู่' };
+
+    const alreadyUsed = db.cards.some(c => c.ownerId === studentId && c.usedForHomeworkId === homeworkId);
+    if (alreadyUsed) return { success: false, message: 'คุณเคยใช้การ์ดส่งงานช้ากับงานชิ้นนี้ไปแล้ว (จำกัด 1 ใบต่องาน)' };
+
+    card.usedForHomeworkId = homeworkId;
+    writeToCloud("cards", card.id, card);
+
+    const homework = db.homework.find(h => h.id === homeworkId);
+    if (homework) {
+        const currentDue = new Date(homework.dueDate);
+        homework.dueDate = new Date(currentDue.getTime() + 24 * 60 * 60 * 1000).toISOString();
+        writeToCloud("homework", homework.id, homework);
+    }
+
+    saveDatabase(db);
+    return { success: true, message: 'ใช้การ์ดสำเร็จ! ขยายเวลากำหนดส่งออกไป 1 วัน' };
+}
+
+export function teacherGiveCardToStudent(studentId) {
+    const db = loadDatabase();
+    const newCardId = 'CARD-' + Math.floor(1000 + Math.random() * 9000);
+    const newCard = {
+        id: newCardId,
+        type: 'LATE_SUBMIT_1D',
+        name: 'การ์ดส่งงานช้า 1 วัน',
+        ownerId: studentId,
+        usedForHomeworkId: null
+    };
+    db.cards.push(newCard);
+    saveDatabase(db);
+
+    writeToCloud("cards", newCard.id, newCard);
+    return newCard;
+}
+
+// --- ระบบสแกนและโอนการ์ดด้วย QR Code ---
+
+export function createTradeOffer(cardId, senderId) {
+    const db = loadDatabase();
+    const card = db.cards.find(c => c.id === cardId && c.ownerId === senderId);
+    if (!card) return null;
+
+    const tradeId = 'TRADE_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4);
+    db.activeTrades[tradeId] = {
+        id: tradeId,
+        cardId: cardId,
+        cardName: card.name,
+        senderId: senderId,
+        createdAt: Date.now()
+    };
+    saveDatabase(db);
+
+    writeToCloud("activeTrades", tradeId, db.activeTrades[tradeId]);
+    return tradeId;
+}
+
+export function getTradeOffer(tradeId) {
+    const db = loadDatabase();
+    return db.activeTrades[tradeId] || null;
+}
+
+export function acceptTradeOffer(tradeId, receiverId) {
+    const db = loadDatabase();
+    const trade = db.activeTrades[tradeId];
+    if (!trade) return { success: false, message: 'ไม่พบรายการแลกเปลี่ยน หรือหมดอายุการเชื่อมต่อ' };
+
+    const card = db.cards.find(c => c.id === trade.cardId);
+    if (!card) return { success: false, message: 'ไม่พบการ์ดใบนี้ในระบบ' };
+    if (card.ownerId !== trade.senderId) return { success: false, message: 'การ์ดถูกย้ายเจ้าของไปแล้ว' };
+    if (trade.senderId === receiverId) return { success: false, message: 'คุณไม่สามารถแลกการ์ดกับตัวเองได้' };
+
+    card.ownerId = receiverId;
+    writeToCloud("cards", card.id, card);
+
+    delete db.activeTrades[tradeId];
+    deleteFromCloud("activeTrades", tradeId);
+    
+    saveDatabase(db);
+    return { success: true, message: `แลกเปลี่ยนการ์ดสำเร็จ! ได้รับ "${card.name}" แล้ว` };
+}
+
+// --- ระบบมอบอำนาจ (Delegation) ---
+
+export function isStudentDelegated(studentId, classId, subject) {
+    const db = loadDatabase();
+    return db.delegations.some(del => del.studentId === studentId && del.class === classId && del.subject === subject);
+}
+
+export function toggleDelegation(studentId, classId, subject) {
+    const db = loadDatabase();
+    const index = db.delegations.findIndex(del => del.studentId === studentId && del.class === classId && del.subject === subject);
+    let delegated = false;
+    const delId = `${studentId}_${classId.replace('/', '-')}_${subject}`;
+
+    if (index === -1) {
+        const newDel = { studentId, class: classId, subject };
+        db.delegations.push(newDel);
+        delegated = true;
+        writeToCloud("delegations", delId, newDel);
+    } else {
+        db.delegations.splice(index, 1);
+        deleteFromCloud("delegations", delId);
+    }
+    saveDatabase(db);
+    return delegated;
+}

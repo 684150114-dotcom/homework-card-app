@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>สมุดการบ้านดิจิทัล - Homework & Card System</title>
+    <meta name="description" content="ระบบติดตามการบ้าน แบ่งรายวิชา สำหรับครู นักเรียน และผู้ปกครอง พร้อมระบบการ์ดพิเศษ">
+    <!-- Google Fonts: Kanit สำหรับทั่วไป และ Mali สำหรับตัวหนังสือที่ดูน่ารักเป็นมิตร -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600&family=Mali:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- FontAwesome for cute icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- QR Code Generator (สร้าง QR Code) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <!-- html5-qrcode (สแกนกล้องจริงในโหมด Production) -->
+    <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+    <!-- CSS Style Link -->
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Sidebar Simulator Panel (สำหรับทดสอบ) -->
+        <div class="simulator-panel">
+            <div class="simulator-header">
+                <h3><i class="fa-solid fa-gamepad"></i> แผงจำลองการทดสอบ</h3>
+                <p>สลับบทบาทอย่างรวดเร็วเพื่อทดสอบระบบ</p>
+                <div id="mode-badge" style="margin-top:8px;padding:4px 10px;border-radius:20px;font-size:0.75rem;font-weight:600;display:inline-flex;align-items:center;gap:6px;background:#e6fcf5;color:#087f5b;border:1px solid #c3fae8">
+                    <i class="fa-solid fa-circle" style="font-size:0.5rem"></i>
+                    <span id="mode-badge-text">โหมด: กำลังโหลด...</span>
+                </div>
+            </div>
+            
+            <div class="simulator-section">
+                <h4>เลือกผู้ใช้งานที่จะเล่น</h4>
+                <div class="simulator-users">
+                    <button class="sim-user-btn active" data-role="teacher" data-username="teacher1" data-password="123">
+                        <span class="user-avatar teacher"><i class="fa-solid fa-chalkboard-user"></i></span>
+                        <div class="user-info">
+                            <span class="user-name">ครูวิภาดา (คุณครู)</span>
+                            <span class="user-meta">ID: teacher1 | Pass: 123</span>
+                        </div>
+                    </button>
+                    
+                    <button class="sim-user-btn" data-role="student" data-username="student1" data-password="123">
+                        <span class="user-avatar student-a"><i class="fa-solid fa-user-graduate"></i></span>
+                        <div class="user-info">
+                            <span class="user-name">ด.ช. สมชาย (นักเรียน 1/1)</span>
+                            <span class="user-meta">ID: student1 | Pass: 123</span>
+                        </div>
+                    </button>
+                    
+                    <button class="sim-user-btn" data-role="student" data-username="student2" data-password="123">
+                        <span class="user-avatar student-b"><i class="fa-solid fa-user-graduate"></i></span>
+                        <div class="user-info">
+                            <span class="user-name">ด.ญ. สมหญิง (นักเรียน 1/1)</span>
+                            <span class="user-meta">ID: student2 | Pass: 123</span>
+                        </div>
+                    </button>
+                    
+                    <button class="sim-user-btn" data-role="parent" data-username="parent1" data-password="123">
+                        <span class="user-avatar parent"><i class="fa-solid fa-people-roof"></i></span>
+                        <div class="user-info">
+                            <span class="user-name">ผู้ปกครอง สมชาย (ลูก S001)</span>
+                            <span class="user-meta">ID: parent1 | Pass: 123</span>
+                        </div>
+                    </button>
+                </div>
+            </div>
+
+            <div class="simulator-section">
+                <h4><i class="fa-brands fa-google-drive"></i> Google Drive จำลองของครู</h4>
+                <div class="drive-container">
+                    <p class="drive-empty" id="drive-empty-msg">ยังไม่มีการส่งไฟล์งานใดๆ</p>
+                    <ul class="drive-file-list" id="drive-file-list">
+                        <!-- รายชื่อไฟล์ที่อัปโหลดจำลองจะโชว์ที่นี่ -->
+                    </ul>
+                </div>
+            </div>
+
+            <div class="simulator-section">
+                <h4><i class="fa-solid fa-database"></i> ข้อมูลระบบ</h4>
+                <div class="system-stats">
+                    <div>จำนวนการบ้านค้างส่ง (สมชาย): <span id="stat-pending-tasks">0</span> งาน</div>
+                    <div>การ์ดส่งช้าของ สมชาย: <span id="stat-cards-s1">0</span> ใบ</div>
+                    <div>การ์ดส่งช้าของ สมหญิง: <span id="stat-cards-s2">0</span> ใบ</div>
+                    <button id="reset-db-btn" class="reset-btn"><i class="fa-solid fa-rotate-left"></i> รีเซ็ตฐานข้อมูลเริ่มต้น</button>
+                </div>
+            </div>
+
+            <div class="simulator-section">
+                <h4><i class="fa-solid fa-sliders"></i> เปิด/ปิดโหมด Firebase (คลาวด์)</h4>
+                <div style="font-size:0.8rem;color:var(--gray);margin-bottom:8px">แก้ไขค่า <code>useFirebase</code> ใน <code>config.js</code> แล้วรีโหลดหน้า</div>
+                <div style="background:#f1f3f5;border-radius:8px;padding:10px;font-size:0.75rem;font-family:monospace">
+                    useFirebase: <strong id="config-firebase-val">false</strong>
+                </div>
+            </div>
+        </div>
+
+        <!-- Phone Mockup Frame -->
+        <div class="phone-frame">
+            <div class="phone-status-bar">
+                <span class="phone-time">09:41</span>
+                <div class="phone-notch"></div>
+                <div class="phone-icons">
+                    <i class="fa-solid fa-signal"></i>
+                    <i class="fa-solid fa-wifi"></i>
+                    <i class="fa-solid fa-battery-three-quarters"></i>
+                </div>
+            </div>
+            
+            <div class="phone-screen" id="phone-screen">
+                <!-- หน้าจอเนื้อหาแอปพลิเคชันจะถูกเรนเดอร์แบบ Dynamic ที่นี่ -->
+                <div class="loading-screen">
+                    <div class="spinner"></div>
+                    <p>กำลังเปิดสมุดจดการบ้าน...</p>
+                </div>
+            </div>
+            
+            <div class="phone-home-indicator"></div>
+        </div>
+    </div>
+
+    <!-- Modal สำหรับแสดงผลการสแกน QR Code จำลอง / การเทรดการ์ด -->
+    <div class="custom-modal" id="qr-trade-modal">
+        <div class="modal-content">
+            <span class="close-modal-btn" id="close-qr-modal-btn">&times;</span>
+            <div id="modal-trade-area">
+                <!-- รายละเอียดการสแกนและยืนยันการเทรดการ์ด -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Main JavaScript Code -->
+    <script type="module" src="app.js"></script>
+</body>
+</html>
