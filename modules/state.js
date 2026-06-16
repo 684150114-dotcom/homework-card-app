@@ -18,9 +18,10 @@ const DB_KEY = 'homework_app_database';
 // ข้อมูลเริ่มต้นของระบบ (Default Seed Data)
 const defaultData = {
     users: {
-        'M000': { id: 'M000', name: 'คุณครูผู้ดูแลระบบ (Master)', role: 'teacher', pass: '159753' }
+        'M000': { id: 'M000', name: 'คุณครูผู้ดูแลระบบ (Master)', role: 'teacher', pass: '1234' }
     },
     subjects: ["คอมพิวเตอร์"],
+    classes: ["1/1"],
     homework: [],
     submissions: [],
     missingAlerts: {},
@@ -48,9 +49,26 @@ export function loadDatabase() {
             saveDatabase(defaultData);
             return defaultData;
         }
-        // ตรวจสอบและบังคับให้รหัสผ่าน M000 เป็น '159753' เพื่อแก้ไขปัญหารหัสเก่าค้างใช้งานไม่ได้
-        if (parsed.users['M000'].pass !== '159753') {
-            parsed.users['M000'].pass = '159753';
+
+        let databaseChanged = false;
+
+        // บังคับให้รหัสผ่านผู้ใช้งานทุกคนเป็น '1234' ทั้งหมด
+        for (const userId in parsed.users) {
+            if (parsed.users[userId].pass !== '1234') {
+                parsed.users[userId].pass = '1234';
+                databaseChanged = true;
+                // อัปโหลดขึ้นคลาวด์ Firebase ด้วยถ้าเปิดใช้งาน
+                writeToCloud("users", userId, parsed.users[userId]);
+            }
+        }
+
+        // ตรวจสอบและบังคับโครงสร้างคลาสเรียน
+        if (!parsed.classes) {
+            parsed.classes = ["1/1"];
+            databaseChanged = true;
+        }
+
+        if (databaseChanged) {
             saveDatabase(parsed);
         }
         return parsed;
@@ -208,6 +226,20 @@ function setupRealtimeSync() {
         saveDatabase(db);
         triggerUIUpdate();
     });
+
+    // 10. ดึงข้อมูลและฟังความเปลี่ยนแปลง: คลาสเรียน
+    onSnapshot(collection(dbCloud, "classes"), (snapshot) => {
+        const db = loadDatabase();
+        const classes = [];
+        snapshot.forEach((doc) => {
+            classes.push(doc.data().name);
+        });
+        if (classes.length > 0) {
+            db.classes = classes;
+            saveDatabase(db);
+            triggerUIUpdate();
+        }
+    });
 }
 
 // เช็คและอัปโหลดข้อมูลเริ่มต้นขึ้น Firebase (Auto Seed)
@@ -227,6 +259,11 @@ async function seedCloudDatabase(force = false) {
             // อัปโหลดรายวิชา
             for (const subj of defaultData.subjects) {
                 await setDoc(doc(dbCloud, "subjects", subj), { name: subj });
+            }
+            // อัปโหลดคลาสเรียน
+            const classesToSeed = defaultData.classes || ["1/1"];
+            for (const cls of classesToSeed) {
+                await setDoc(doc(dbCloud, "classes", cls.replace('/', '-')), { name: cls });
             }
             // อัปโหลดการบ้าน
             for (const hw of defaultData.homework) {
@@ -316,7 +353,7 @@ export function createUser(id, name, role, pass, classId = null) {
     if (db.users[id]) {
         return { success: false, message: 'มี User ID นี้ในระบบอยู่แล้ว' };
     }
-    const newUser = { id, name, role, pass };
+    const newUser = { id, name, role, pass: '1234' }; // บังคับให้เป็น 1234
     if (role === 'student') {
         newUser.class = classId || '1/1';
         newUser.parentId = null;
@@ -332,11 +369,58 @@ export function createUser(id, name, role, pass, classId = null) {
 export function updatePassword(userId, newPassword) {
     const db = loadDatabase();
     if (db.users[userId]) {
-        db.users[userId].pass = newPassword;
+        db.users[userId].pass = '1234'; // บังคับเป็น 1234
         saveDatabase(db);
         
         // เขียนขึ้นคลาวด์
         writeToCloud("users", userId, db.users[userId]);
+        return true;
+    }
+    return false;
+}
+
+export function addClass(name) {
+    const db = loadDatabase();
+    if (name && !db.classes.includes(name)) {
+        db.classes.push(name);
+        saveDatabase(db);
+        writeToCloud("classes", name.replace('/', '-'), { name });
+        return true;
+    }
+    return false;
+}
+
+export function deleteClass(name) {
+    const db = loadDatabase();
+    db.classes = db.classes.filter(c => c !== name);
+    // เปลี่ยนห้องเรียนของนักเรียนที่เป็นสมาชิกในห้องนี้เป็น ""
+    Object.values(db.users).forEach(u => {
+        if (u.class === name) {
+            u.class = "";
+            writeToCloud("users", u.id, u);
+        }
+    });
+    saveDatabase(db);
+    deleteFromCloud("classes", name.replace('/', '-'));
+}
+
+export function updateStudentClass(studentId, classId) {
+    const db = loadDatabase();
+    if (db.users[studentId]) {
+        db.users[studentId].class = classId;
+        saveDatabase(db);
+        writeToCloud("users", studentId, db.users[studentId]);
+        return true;
+    }
+    return false;
+}
+
+export function deleteUser(userId) {
+    const db = loadDatabase();
+    if (db.users[userId]) {
+        delete db.users[userId];
+        saveDatabase(db);
+        deleteFromCloud("users", userId);
         return true;
     }
     return false;

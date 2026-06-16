@@ -22,14 +22,19 @@ import {
     addSubject,
     deleteSubject,
     createUser,
-    resetDatabase
+    resetDatabase,
+    addClass,
+    deleteClass,
+    updateStudentClass,
+    deleteUser
 } from './state.js';
 import { handleChangePassword } from './auth.js';
 import { renderCreateQRView, renderScanView } from './qr.js';
 
 // เก็บสถานะการทำงานภายในหน้า UI (UI View State)
 let activeSubjectTab = 'คอมพิวเตอร์';
-let currentActiveView = 'homework'; // homework, grades, cards, settings, teacherSubmissions, teacherDelegation
+let currentActiveView = 'homework'; // homework, grades, cards, settings, teacherSubmissions, teacherDelegation, classManagement
+let teacherSelectedClass = null; // ห้องเรียนที่ครูเลือกอยู่ (null = แสดงทุกห้อง)
 
 // บีบอัดรูปภาพด้วย HTML5 Canvas ให้ขนาดไม่เกิน 100KB (100 * 1024 bytes)
 async function compressImage(file, maxSizeBytes = 100 * 1024) {
@@ -108,6 +113,7 @@ function getNavItems(role) {
             { id: 'homework', label: 'การบ้าน', icon: 'fa-book-open' },
             { id: 'teacherSubmissions', label: 'ตรวจงาน', icon: 'fa-clipboard-check' },
             { id: 'teacherDelegation', label: 'ผู้ช่วยแอดงาน', icon: 'fa-user-shield' },
+            { id: 'classManagement', label: 'จัดการห้องเรียน', icon: 'fa-chalkboard' },
             { id: 'settings', label: 'ตั้งค่า', icon: 'fa-sliders' }
         ];
     } else if (role === 'student') {
@@ -267,6 +273,9 @@ function renderActiveView(phoneScreen, user) {
         case 'teacherDelegation':
             renderTeacherDelegation(bodyContent, user);
             break;
+        case 'classManagement':
+            renderClassManagement(bodyContent, user, phoneScreen);
+            break;
     }
 }
 
@@ -275,6 +284,33 @@ function renderActiveView(phoneScreen, user) {
 // -------------------------------------------------------------
 function renderHomeworkTab(container, user, studentId, classId, phoneScreen) {
     const db = loadDatabase();
+
+    // ---- แถบเลือกห้องเรียนสำหรับครู ----
+    if (user.role === 'teacher') {
+        const classes = db.classes || [];
+        // ตั้งค่า default ห้องเรียนแรก ถ้ายังไม่ได้เลือก
+        if (!teacherSelectedClass && classes.length > 0) {
+            teacherSelectedClass = classes[0];
+        }
+        // Override classId ด้วยห้องที่ครูเลือก
+        classId = teacherSelectedClass || classId;
+
+        const classSelectorWrapper = document.createElement('div');
+        classSelectorWrapper.style.cssText = 'display:flex; gap:8px; padding:8px 12px; overflow-x:auto; flex-shrink:0; background:var(--gray-light); border-radius:10px; margin-bottom:8px;';
+
+        classes.forEach(cls => {
+            const btn = document.createElement('button');
+            btn.textContent = `ห้อง ${cls}`;
+            btn.style.cssText = `white-space:nowrap; padding:6px 14px; border-radius:20px; border:1.5px solid var(--primary); font-family:var(--font-normal); font-size:0.82rem; cursor:pointer; background:${cls === teacherSelectedClass ? 'var(--primary)' : 'white'}; color:${cls === teacherSelectedClass ? 'white' : 'var(--primary)'}; font-weight:600; transition: all 0.2s;`;
+            btn.onclick = () => {
+                teacherSelectedClass = cls;
+                renderHomeworkTab(container, user, studentId, cls, phoneScreen);
+            };
+            classSelectorWrapper.appendChild(btn);
+        });
+        container.appendChild(classSelectorWrapper);
+    }
+    // (db already loaded above)
     
     // 1. สร้างแถบสไลด์แท็บรายวิชา
     const tabsWrapper = document.createElement('div');
@@ -1061,54 +1097,71 @@ function loadSubmissionsForTeacher(homeworkId, container) {
 // -------------------------------------------------------------
 function renderTeacherDelegation(container, user) {
     const db = loadDatabase();
-    
-    container.innerHTML = `
-        <div style="display: flex; flex-direction: column; gap: 15px;">
-            <h3 style="font-family: var(--font-cute); color: var(--primary-dark); font-size: 1.25rem;">
-                <i class="fa-solid fa-user-shield"></i> มอบอำนาจในการสั่งการบ้าน
-            </h3>
-            <p style="font-size: 0.8rem; color: var(--gray);">ครูสามารถแต่งตั้งนักเรียนหัวหน้าห้องหรือตัวแทนรายวิชาเพื่อทำการเพิ่มเนื้อหาการบ้านในระบบแทนได้</p>
-            
-            <div style="background: white; padding: 16px; border-radius: 12px; box-shadow: var(--shadow-sm); display: flex; flex-direction: column; gap: 12px;">
-                <div class="form-group">
-                    <label>1. เลือกรายวิชา</label>
-                    <select id="delegate-subj-select" class="form-control" style="padding-left:12px;">
-                        ${db.subjects.map(subj => `<option value="${subj}">${subj}</option>`).join('')}
-                    </select>
+    const classes = db.classes || ['1/1'];
+    let delegationSelectedClass = teacherSelectedClass || classes[0] || '1/1';
+
+    function renderDelegationContent() {
+        container.innerHTML = `
+            <div style="display: flex; flex-direction: column; gap: 15px;">
+                <h3 style="font-family: var(--font-cute); color: var(--primary-dark); font-size: 1.25rem;">
+                    <i class="fa-solid fa-user-shield"></i> มอบอำนาจในการสั่งการบ้าน
+                </h3>
+                <p style="font-size: 0.8rem; color: var(--gray);">ครูสามารถแต่งตั้งนักเรียนหัวหน้าห้องหรือตัวแทนรายวิชาเพื่อทำการเพิ่มเนื้อหาการบ้านในระบบแทนได้</p>
+                
+                <div style="background: white; padding: 16px; border-radius: 12px; box-shadow: var(--shadow-sm); display: flex; flex-direction: column; gap: 12px;">
+                    <div class="form-group">
+                        <label>1. เลือกรายวิชา</label>
+                        <select id="delegate-subj-select" class="form-control" style="padding-left:12px;">
+                            ${db.subjects.map(subj => `<option value="${subj}">${subj}</option>`).join('')}
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label>2. เลือกห้องเรียน</label>
+                        <select id="delegate-class-select" class="form-control" style="padding-left:12px;">
+                            ${classes.map(cls => `<option value="${cls}" ${cls === delegationSelectedClass ? 'selected' : ''}>${cls}</option>`).join('')}
+                        </select>
+                    </div>
                 </div>
 
-                <div class="form-group">
-                    <label>2. เลือกห้องเรียน</label>
-                    <input type="text" class="form-control" style="padding-left:12px; background:var(--gray-light);" value="1/1" disabled>
+                <h4 style="font-size: 0.9rem; margin-top: 10px;" id="delegation-class-title">รายชื่อนักเรียนร่วมชั้นเรียน (ห้อง ${delegationSelectedClass})</h4>
+                <div style="display: flex; flex-direction: column; gap: 10px;" id="delegation-list-area">
                 </div>
             </div>
+        `;
 
-            <h4 style="font-size: 0.9rem; margin-top: 10px;">รายชื่อนักเรียนร่วมชั้นเรียน (ห้อง 1/1)</h4>
-            <div style="display: flex; flex-direction: column; gap: 10px;" id="delegation-list-area">
-                <!-- รายชื่อนักเรียนที่จะกดมอบอำนาจ -->
-            </div>
-        </div>
-    `;
+        const subjSelect = document.getElementById('delegate-subj-select');
+        const classSelect = document.getElementById('delegate-class-select');
 
-    const select = document.getElementById('delegate-subj-select');
-    select.onchange = () => {
-        loadStudentsDelegation(select.value);
-    };
+        const reloadList = () => {
+            delegationSelectedClass = classSelect.value;
+            document.getElementById('delegation-class-title').textContent = `รายชื่อนักเรียนร่วมชั้นเรียน (ห้อง ${delegationSelectedClass})`;
+            loadStudentsDelegation(subjSelect.value, delegationSelectedClass);
+        };
 
-    loadStudentsDelegation(select.value);
+        subjSelect.onchange = reloadList;
+        classSelect.onchange = reloadList;
+
+        loadStudentsDelegation(subjSelect.value, delegationSelectedClass);
+    }
+
+    renderDelegationContent();
 }
 
-function loadStudentsDelegation(subject) {
+function loadStudentsDelegation(subject, classId) {
     const listArea = document.getElementById('delegation-list-area');
     if (!listArea) return;
 
     listArea.innerHTML = "";
-    
-    // ดึงรายชื่อนักเรียนห้อง 1/1
-    const students = getStudentsInClass('1/1');
+    const students = getStudentsInClass(classId);
+
+    if (students.length === 0) {
+        listArea.innerHTML = `<p style="color:var(--gray); text-align:center; padding:20px;">ไม่พบนักเรียนในห้อง ${classId}</p>`;
+        return;
+    }
 
     students.forEach(std => {
-        const hasPower = isStudentDelegated(std.id, '1/1', subject);
+        const hasPower = isStudentDelegated(std.id, classId, subject);
 
         const card = document.createElement('div');
         card.className = 'grade-row';
@@ -1126,11 +1179,147 @@ function loadStudentsDelegation(subject) {
         listArea.appendChild(card);
 
         document.getElementById(`delegate-btn-${std.id}`).onclick = () => {
-            const delegated = toggleDelegation(std.id, '1/1', subject);
+            const delegated = toggleDelegation(std.id, classId, subject);
             alert(delegated ? `แต่งตั้ง ${std.name} เป็นตัวแทนสั่งงานวิชา ${subject} สำเร็จ!` : `ถอนอำนาจการสั่งงานของ ${std.name} เรียบร้อย`);
-            loadStudentsDelegation(subject);
+            loadStudentsDelegation(subject, classId);
         };
     });
+}
+
+// -------------------------------------------------------------
+// 11. หน้าจัดการห้องเรียน (Class Management View)
+//     - Master (M000) สร้าง/ลบห้องเรียนได้
+//     - ครูทุกคนเพิ่ม/ลบนักเรียนในห้องได้
+// -------------------------------------------------------------
+function renderClassManagement(container, user, phoneScreen) {
+    const isMaster = user.id === 'M000';
+    let managingClass = null;
+
+    function render() {
+        const db2 = loadDatabase();
+        const cls2 = db2.classes || [];
+        if (!managingClass && cls2.length > 0) managingClass = cls2[0];
+        const allStudents = Object.values(db2.users).filter(u => u.role === 'student');
+        const membersInClass = managingClass ? allStudents.filter(u => u.class === managingClass) : [];
+        const nonMembers = managingClass ? allStudents.filter(u => u.class !== managingClass) : allStudents;
+
+        container.innerHTML = `
+            <div style="display:flex; flex-direction:column; gap:14px;">
+                <h3 style="font-family:var(--font-cute); color:var(--primary-dark); font-size:1.2rem;">
+                    <i class="fa-solid fa-chalkboard"></i> จัดการห้องเรียน
+                </h3>
+
+                <div style="background:white; border-radius:12px; padding:14px; box-shadow:var(--shadow-sm);">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                        <span style="font-weight:600; font-size:0.9rem;"><i class="fa-solid fa-list-ul"></i> รายการห้องเรียน</span>
+                        ${isMaster ? `<button id="add-class-btn" style="background:var(--primary); color:white; border:none; border-radius:8px; padding:5px 12px; font-size:0.8rem; cursor:pointer; font-family:var(--font-normal);"><i class="fa-solid fa-plus"></i> สร้างห้องใหม่</button>` : ''}
+                    </div>
+                    <div style="display:flex; flex-wrap:wrap; gap:8px;">
+                        ${cls2.length === 0 ? `<span style="color:var(--gray); font-size:0.85rem;">ยังไม่มีห้องเรียน</span>` : cls2.map(cls => `
+                            <div style="display:inline-flex; align-items:center; gap:6px; background:${cls === managingClass ? 'var(--primary)' : 'var(--primary-light)'}; color:${cls === managingClass ? 'white' : 'var(--primary-dark)'}; border-radius:20px; padding:5px 12px; cursor:pointer; font-size:0.82rem; font-weight:600;" id="class-chip-${cls.replace('/','_')}">
+                                <span class="chip-label">ห้อง ${cls}</span>
+                                ${isMaster ? `<i class="fa-solid fa-xmark del-class-icon" data-cls="${cls}" style="font-size:0.72rem; opacity:0.75;"></i>` : ''}
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+
+                ${managingClass ? `
+                <div style="background:white; border-radius:12px; padding:14px; box-shadow:var(--shadow-sm);">
+                    <span style="font-weight:600; font-size:0.9rem;"><i class="fa-solid fa-users"></i> สมาชิกห้อง ${managingClass} (${membersInClass.length} คน)</span>
+                    <div style="display:flex; flex-direction:column; gap:8px; margin-top:10px;">
+                        ${membersInClass.length === 0 ? `<p style="color:var(--gray); font-size:0.85rem; text-align:center; padding:10px;">ยังไม่มีสมาชิกในห้องนี้</p>` : membersInClass.map(st => `
+                            <div style="display:flex; justify-content:space-between; align-items:center; background:var(--gray-light); border-radius:10px; padding:8px 12px;">
+                                <div>
+                                    <span style="font-weight:600; font-size:0.85rem;">${st.name}</span>
+                                    <span style="font-size:0.72rem; color:var(--gray); margin-left:6px;">${st.id}</span>
+                                </div>
+                                <button data-remove="${st.id}" class="remove-member-btn" style="background:var(--danger-light); color:var(--danger); border:none; border-radius:8px; padding:4px 10px; font-size:0.75rem; cursor:pointer; font-family:var(--font-normal);"><i class="fa-solid fa-minus"></i> นำออก</button>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+
+                <div style="background:white; border-radius:12px; padding:14px; box-shadow:var(--shadow-sm);">
+                    <span style="font-weight:600; font-size:0.9rem;"><i class="fa-solid fa-user-plus"></i> เพิ่มนักเรียนเข้าห้อง ${managingClass}</span>
+                    <div style="display:flex; flex-direction:column; gap:8px; margin-top:10px;">
+                        ${nonMembers.length === 0 ? `<p style="color:var(--gray); font-size:0.85rem; text-align:center; padding:10px;">นักเรียนทุกคนอยู่ในห้องนี้แล้ว</p>` : nonMembers.map(st => `
+                            <div style="display:flex; justify-content:space-between; align-items:center; background:var(--gray-light); border-radius:10px; padding:8px 12px;">
+                                <div>
+                                    <span style="font-weight:600; font-size:0.85rem;">${st.name}</span>
+                                    <span style="font-size:0.72rem; color:var(--gray); margin-left:6px;">${st.id} ${st.class ? `| ห้องเดิม: ${st.class}` : '| ไม่มีห้อง'}</span>
+                                </div>
+                                <button data-add="${st.id}" class="add-member-btn" style="background:var(--primary-light); color:var(--primary-dark); border:none; border-radius:8px; padding:4px 10px; font-size:0.75rem; cursor:pointer; font-family:var(--font-normal);"><i class="fa-solid fa-plus"></i> เพิ่ม</button>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+                ` : `<p style="color:var(--gray); text-align:center; padding:20px;">กรุณาเลือกห้องเรียนด้านบน</p>`}
+            </div>
+        `;
+
+        // ผูก event: เลือกห้องเรียน
+        cls2.forEach(cls => {
+            const chip = document.getElementById(`class-chip-${cls.replace('/', '_')}`);
+            if (!chip) return;
+            chip.querySelector('.chip-label').onclick = () => {
+                managingClass = cls;
+                teacherSelectedClass = cls;
+                render();
+            };
+            const delIcon = chip.querySelector('.del-class-icon');
+            if (delIcon && isMaster) {
+                delIcon.onclick = (e) => {
+                    e.stopPropagation();
+                    if (confirm(`ต้องการลบห้องเรียน "${cls}" ใช่หรือไม่? นักเรียนในห้องนี้จะถูกนำออกจากห้อง`)) {
+                        deleteClass(cls);
+                        const rem = loadDatabase().classes;
+                        managingClass = rem.length > 0 ? rem[0] : null;
+                        render();
+                    }
+                };
+            }
+        });
+
+        // ปุ่มสร้างห้องใหม่ (Master)
+        const addClassBtn = document.getElementById('add-class-btn');
+        if (addClassBtn) {
+            addClassBtn.onclick = () => {
+                const name = prompt('กรอกชื่อห้องเรียนใหม่ (เช่น 2/1):');
+                if (name && name.trim()) {
+                    if (addClass(name.trim())) {
+                        managingClass = name.trim();
+                        teacherSelectedClass = name.trim();
+                        render();
+                    } else {
+                        alert('ห้องเรียนนี้มีอยู่แล้ว');
+                    }
+                }
+            };
+        }
+
+        // ปุ่มนำสมาชิกออก
+        container.querySelectorAll('.remove-member-btn').forEach(btn => {
+            btn.onclick = () => {
+                const sid = btn.dataset.remove;
+                const st = loadDatabase().users[sid];
+                if (confirm(`นำ ${st ? st.name : sid} ออกจากห้อง ${managingClass} ใช่หรือไม่?`)) {
+                    updateStudentClass(sid, '');
+                    render();
+                }
+            };
+        });
+
+        // ปุ่มเพิ่มนักเรียนเข้าห้อง
+        container.querySelectorAll('.add-member-btn').forEach(btn => {
+            btn.onclick = () => {
+                updateStudentClass(btn.dataset.add, managingClass);
+                render();
+            };
+        });
+    }
+
+    render();
 }
 
 // -------------------------------------------------------------
