@@ -320,10 +320,17 @@ if (CONFIG.useFirebase) {
 // ตรวจสอบล็อกอิน
 export function login(username, password) {
     const db = loadDatabase();
-    const user = db.users[username];
-    if (user && user.pass === password) {
-        localStorage.setItem('current_user_id', user.id);
-        return user;
+    if (!username) return null;
+    const normalizedUsername = username.trim().toUpperCase();
+    
+    // ค้นหาคีย์ผู้ใช้ที่ไม่สนใจตัวพิมพ์เล็ก/ใหญ่ (Case-insensitive)
+    const matchedKey = Object.keys(db.users).find(key => key.toUpperCase() === normalizedUsername);
+    if (matchedKey) {
+        const user = db.users[matchedKey];
+        if (user && user.pass === password) {
+            localStorage.setItem('current_user_id', user.id);
+            return user;
+        }
     }
     return null;
 }
